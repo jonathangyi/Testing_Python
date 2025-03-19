@@ -154,3 +154,5 @@ elif latest_rsi < 30:
 # Refresh Button
 if st.button("🔄 Refresh Data"):
     st.rerun()
+
+#testing purpose
