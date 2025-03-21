@@ -1,11 +1,11 @@
 import streamlit as st
 import pandas as pd
 import requests
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
+import time
 import ta
 from prophet import Prophet
 from sklearn.metrics import mean_absolute_percentage_error
+import threading
 
 # Function to fetch real-time BTC price
 def get_live_btc_price():
@@ -65,153 +65,209 @@ st.set_page_config(page_title="Bitcoin Price Prediction", layout="wide")
 
 st.title("📈 Real-Time Bitcoin Prediction Dashboard")
 
-# Live Bitcoin Price
-st.subheader("💰 Live Bitcoin Price")
-btc_price = get_live_btc_price()
-if btc_price:
-    st.write(f"📌 **Current BTC Price: ${btc_price:,.2f}**")
+# Create a placeholder for the live price
+price_placeholder = st.empty()
 
-# Fetch historical data
-st.subheader("📊 Historical Bitcoin Data (Past Year)")
-df = fetch_btc_data()
+# Function to continuously update the price
+def update_price_in_background():
+    last_price = None
+    while True:
+        current_price = get_live_btc_price()
+        if current_price and current_price != last_price:
+            # Determine price change direction for color coding
+            if last_price is not None:
+                if current_price > last_price:
+                    price_color = "green"
+                    price_change = "▲"
+                elif current_price < last_price:
+                    price_color = "red"
+                    price_change = "▼"
+                else:
+                    price_color = "gray"
+                    price_change = "•"
+                
+                # Update the placeholder with new price and color
+                price_placeholder.markdown(
+                    f"""
+                    ### 💰 Live Bitcoin Price
+                    <div style="display: flex; align-items: center;">
+                        <h3 style="margin: 0; color: {price_color};">
+                            ${current_price:,.2f} {price_change}
+                        </h3>
+                        <span style="margin-left: 10px; color: {price_color}; font-size: 0.8em;">
+                            {abs(current_price - last_price):,.2f} ({abs(current_price - last_price) / last_price * 100:.2f}%)
+                        </span>
+                    </div>
+                    <div style="font-size: 0.8em; color: gray;">Last updated: {time.strftime("%H:%M:%S")}</div>
+                    """, 
+                    unsafe_allow_html=True
+                )
+            else:
+                # First time showing the price
+                price_placeholder.markdown(
+                    f"""
+                    ### 💰 Live Bitcoin Price
+                    <h3 style="margin: 0;">${current_price:,.2f}</h3>
+                    <div style="font-size: 0.8em; color: gray;">Last updated: {time.strftime("%H:%M:%S")}</div>
+                    """, 
+                    unsafe_allow_html=True
+                )
+            
+            last_price = current_price
+        
+        time.sleep(1)  # Update every second
 
-if not df.empty:
-    df = compute_indicators(df)
-    st.write(df.tail(10))  # Show last 10 rows
+# Initialize the price update thread
+if 'price_thread' not in st.session_state:
+    st.session_state.price_thread = threading.Thread(target=update_price_in_background)
+    st.session_state.price_thread.daemon = True
+    st.session_state.price_thread.start()
 
-    # User input for forecast period
-    days = st.slider("🔮 Select Forecast Period (Days)", min_value=7, max_value=90, value=30)
+# Rest of the dashboard components
+main_content = st.container()
 
-    # Predict BTC prices
-    st.subheader(f"📅 Bitcoin Price Forecast for Next {days} Days")
-    forecast = predict_btc(df, days)
+with main_content:
+    # Fetch historical data
+    st.subheader("📊 Historical Bitcoin Data (Past Year)")
+    df = fetch_btc_data()
 
-    if not forecast.empty:
-        # Merge actual & predicted data
-        merged_df = pd.merge(df, forecast, on="ds", how="inner")  # Align actual & predicted values
+    if not df.empty:
+        df = compute_indicators(df)
+        st.write(df.tail(10))  # Show last 10 rows
 
-        # Compute rolling accuracy (MAPE-based)
-        window_size = st.slider("📊 Select Rolling Window for Accuracy (Days)", min_value=7, max_value=60, value=30)
-        merged_df["rolling_mape"] = merged_df["y"].rolling(window_size).apply(
-            lambda x: mean_absolute_percentage_error(x, forecast["yhat"].loc[x.index]) * 100 if len(x) == window_size else None
-        )
-        merged_df["rolling_accuracy"] = 100 - merged_df["rolling_mape"]  # Convert MAPE to accuracy
-        rolling_accuracy_df = merged_df.dropna(subset=["rolling_accuracy"])  # Remove NaN values
+        # User input for forecast period
+        days = st.slider("🔮 Select Forecast Period (Days)", min_value=7, max_value=90, value=30)
 
-        # 📈 Improved Prediction Graph
-        df["ds"] = pd.to_datetime(df["ds"])  # Ensure correct datetime format
-        last_30_days = df[df["ds"] >= df["ds"].max() - pd.Timedelta(days=30)]
+        # Predict BTC prices
+        st.subheader(f"📅 Bitcoin Price Forecast for Next {days} Days")
+        forecast = predict_btc(df, days)
 
-        # Using Streamlit's native chart capabilities instead of matplotlib
-        st.subheader("📈 Bitcoin Price Prediction")
-        
-        # Create prediction dataframe for Streamlit chart
-        chart_data = pd.DataFrame({
-            "Date": forecast["ds"],
-            "Predicted Price": forecast["yhat"],
-            "Lower Bound": forecast["yhat_lower"],
-            "Upper Bound": forecast["yhat_upper"]
-        })
-        
-        # Add actual prices for the last 30 days
-        actual_data = pd.DataFrame({
-            "Date": last_30_days["ds"],
-            "Actual Price": last_30_days["y"]
-        })
-        
-        # Display accuracy info
-        mape = mean_absolute_percentage_error(merged_df["y"], merged_df["yhat"]) * 100
-        accuracy = 100 - mape
-        st.info(f"📊 Model Accuracy: {accuracy:.2f}%")
-        
-        # Use Streamlit's line chart
-        st.line_chart(
-            data=pd.concat([
-                actual_data.set_index("Date")["Actual Price"],
-                chart_data.set_index("Date")[["Predicted Price", "Lower Bound", "Upper Bound"]]
-            ], axis=1)
-        )
-        
-        # 📜 Forecasted Data Table
-        st.subheader("📜 Forecasted Prices")
-        st.write(forecast[["ds", "yhat", "yhat_lower", "yhat_upper"]].tail(days))
-        
-        # Display rolling accuracy using Streamlit's native charts
-        st.subheader("📉 Rolling Model Accuracy Over Time")
-        accuracy_chart = pd.DataFrame({
-            "Date": rolling_accuracy_df["ds"],
-            "Rolling Accuracy (%)": rolling_accuracy_df["rolling_accuracy"],
-            "Average Accuracy": [rolling_accuracy_df["rolling_accuracy"].mean()] * len(rolling_accuracy_df)
-        }).set_index("Date")
-        
-        st.line_chart(accuracy_chart)
-        
-        # Moving Averages using Streamlit's native charts
-        st.subheader("📊 Moving Averages (SMA 10 & SMA 50)")
-        ma_chart = pd.DataFrame({
-            "Date": last_30_days["ds"],
-            "Bitcoin Price": last_30_days["y"],
-            "10-day SMA": last_30_days["SMA_10"],
-            "50-day SMA": last_30_days["SMA_50"]
-        }).set_index("Date")
-        
-        st.line_chart(ma_chart)
-        
-        # RSI Indicator with custom HTML for better visualization
-        st.subheader("📈 RSI Indicator (Buy/Sell Signals)")
-        
-        rsi_chart = pd.DataFrame({
-            "Date": last_30_days["ds"],
-            "RSI": last_30_days["RSI"]
-        }).set_index("Date")
-        
-        st.line_chart(rsi_chart)
-        
-        # Add visual horizontal lines for RSI thresholds
-        st.markdown("""
-        <style>
-        .rsi-info {
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 10px;
-        }
-        .overbought {
-            background-color: rgba(255, 0, 0, 0.1);
-            border-left: 5px solid red;
-        }
-        .neutral {
-            background-color: rgba(128, 128, 128, 0.1);
-            border-left: 5px solid gray;
-        }
-        .oversold {
-            background-color: rgba(0, 128, 0, 0.1);
-            border-left: 5px solid green;
-        }
-        </style>
-        
-        <div class="rsi-info overbought">
-            <strong>Overbought (Sell Signal):</strong> RSI > 70
-        </div>
-        <div class="rsi-info neutral">
-            <strong>Neutral:</strong> 30 ≤ RSI ≤ 70
-        </div>
-        <div class="rsi-info oversold">
-            <strong>Oversold (Buy Signal):</strong> RSI < 30
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # RSI-based Buy/Sell Alerts
-        latest_rsi = df["RSI"].iloc[-1]
-        if latest_rsi > 70:
-            st.warning(f"🚨 RSI is {latest_rsi:.2f} → Overbought! Consider Selling!")
-        elif latest_rsi < 30:
-            st.success(f"✅ RSI is {latest_rsi:.2f} → Oversold! Consider Buying!")
-        else:
-            st.info(f"ℹ️ RSI is {latest_rsi:.2f} → Neutral")
-else:
-    st.error("Failed to fetch historical data. Please check your internet connection and try again.")
+        if not forecast.empty:
+            # Merge actual & predicted data
+            merged_df = pd.merge(df, forecast, on="ds", how="inner")  # Align actual & predicted values
 
-# Refresh Button
-if st.button("🔄 Refresh Data"):
-    st.cache_data.clear()  # Clear cached data
-    st.rerun()
+            # Compute rolling accuracy (MAPE-based)
+            window_size = st.slider("📊 Select Rolling Window for Accuracy (Days)", min_value=7, max_value=60, value=30)
+            merged_df["rolling_mape"] = merged_df["y"].rolling(window_size).apply(
+                lambda x: mean_absolute_percentage_error(x, forecast["yhat"].loc[x.index]) * 100 if len(x) == window_size else None
+            )
+            merged_df["rolling_accuracy"] = 100 - merged_df["rolling_mape"]  # Convert MAPE to accuracy
+            rolling_accuracy_df = merged_df.dropna(subset=["rolling_accuracy"])  # Remove NaN values
+
+            # 📈 Improved Prediction Graph
+            df["ds"] = pd.to_datetime(df["ds"])  # Ensure correct datetime format
+            last_30_days = df[df["ds"] >= df["ds"].max() - pd.Timedelta(days=30)]
+
+            # Use Streamlit's native chart capabilities
+            st.subheader("📈 Bitcoin Price Prediction")
+            
+            # Create prediction dataframe for Streamlit chart
+            chart_data = pd.DataFrame({
+                "Date": forecast["ds"],
+                "Predicted Price": forecast["yhat"],
+                "Lower Bound": forecast["yhat_lower"],
+                "Upper Bound": forecast["yhat_upper"]
+            })
+            
+            # Add actual prices for the last 30 days
+            actual_data = pd.DataFrame({
+                "Date": last_30_days["ds"],
+                "Actual Price": last_30_days["y"]
+            })
+            
+            # Display accuracy info
+            mape = mean_absolute_percentage_error(merged_df["y"], merged_df["yhat"]) * 100
+            accuracy = 100 - mape
+            st.info(f"📊 Model Accuracy: {accuracy:.2f}%")
+            
+            # Use Streamlit's line chart
+            st.line_chart(
+                data=pd.concat([
+                    actual_data.set_index("Date")["Actual Price"],
+                    chart_data.set_index("Date")[["Predicted Price", "Lower Bound", "Upper Bound"]]
+                ], axis=1)
+            )
+            
+            # 📜 Forecasted Data Table
+            st.subheader("📜 Forecasted Prices")
+            st.write(forecast[["ds", "yhat", "yhat_lower", "yhat_upper"]].tail(days))
+            
+            # Display rolling accuracy using Streamlit's native charts
+            st.subheader("📉 Rolling Model Accuracy Over Time")
+            accuracy_chart = pd.DataFrame({
+                "Date": rolling_accuracy_df["ds"],
+                "Rolling Accuracy (%)": rolling_accuracy_df["rolling_accuracy"],
+                "Average Accuracy": [rolling_accuracy_df["rolling_accuracy"].mean()] * len(rolling_accuracy_df)
+            }).set_index("Date")
+            
+            st.line_chart(accuracy_chart)
+            
+            # Moving Averages using Streamlit's native charts
+            st.subheader("📊 Moving Averages (SMA 10 & SMA 50)")
+            ma_chart = pd.DataFrame({
+                "Date": last_30_days["ds"],
+                "Bitcoin Price": last_30_days["y"],
+                "10-day SMA": last_30_days["SMA_10"],
+                "50-day SMA": last_30_days["SMA_50"]
+            }).set_index("Date")
+            
+            st.line_chart(ma_chart)
+            
+            # RSI Indicator with custom HTML for better visualization
+            st.subheader("📈 RSI Indicator (Buy/Sell Signals)")
+            
+            rsi_chart = pd.DataFrame({
+                "Date": last_30_days["ds"],
+                "RSI": last_30_days["RSI"]
+            }).set_index("Date")
+            
+            st.line_chart(rsi_chart)
+            
+            # Add visual horizontal lines for RSI thresholds
+            st.markdown("""
+            <style>
+            .rsi-info {
+                padding: 10px;
+                border-radius: 5px;
+                margin-bottom: 10px;
+            }
+            .overbought {
+                background-color: rgba(255, 0, 0, 0.1);
+                border-left: 5px solid red;
+            }
+            .neutral {
+                background-color: rgba(128, 128, 128, 0.1);
+                border-left: 5px solid gray;
+            }
+            .oversold {
+                background-color: rgba(0, 128, 0, 0.1);
+                border-left: 5px solid green;
+            }
+            </style>
+            
+            <div class="rsi-info overbought">
+                <strong>Overbought (Sell Signal):</strong> RSI > 70
+            </div>
+            <div class="rsi-info neutral">
+                <strong>Neutral:</strong> 30 ≤ RSI ≤ 70
+            </div>
+            <div class="rsi-info oversold">
+                <strong>Oversold (Buy Signal):</strong> RSI < 30
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # RSI-based Buy/Sell Alerts
+            latest_rsi = df["RSI"].iloc[-1]
+            if latest_rsi > 70:
+                st.warning(f"🚨 RSI is {latest_rsi:.2f} → Overbought! Consider Selling!")
+            elif latest_rsi < 30:
+                st.success(f"✅ RSI is {latest_rsi:.2f} → Oversold! Consider Buying!")
+            else:
+                st.info(f"ℹ️ RSI is {latest_rsi:.2f} → Neutral")
+    else:
+        st.error("Failed to fetch historical data. Please check your internet connection and try again.")
+
+    # Refresh Button
+    if st.button("🔄 Refresh All Data"):
+        st.cache_data.clear()  # Clear cached data
+        st.rerun()
