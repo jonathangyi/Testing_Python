@@ -5,8 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
 
 # Use a font that supports emojis, such as DejaVu Sans
-plt.rcParams["font.family"] = "DejaVu Sans"
-
+plt.rcParams["font.family"] = "Arial"
 
 import matplotlib.dates as mdates
 import ta
