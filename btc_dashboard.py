@@ -355,20 +355,26 @@ def update_price_in_background():
         
         time.sleep(1)  # Update every second
 
-# Fetch data first if missing
-if 'btc_df' not in locals():
-    btc_df = fetch_btc_data()
+# Function to fetch and prepare data
+def fetch_and_prepare_data():
+    if 'btc_df' not in locals():
+        btc_df = fetch_btc_data()
 
-if 'stock_df' not in locals():
-    stock_df = fetch_stock_data()
-    
-# Reset index to ensure single-level index before merging
-btc_df = btc_df.reset_index(drop=True)
-stock_df = stock_df.reset_index(drop=True)
+    if 'stock_df' not in locals():
+        stock_df = fetch_stock_data()
 
-# Rename 'Date' column in stock_df if needed
-if "Date" in stock_df.columns:
-    stock_df.rename(columns={"Date": "ds"}, inplace=True)
+    # Reset index to ensure single-level index before merging
+    btc_df = btc_df.reset_index(drop=True)
+    stock_df = stock_df.reset_index(drop=True)
+
+    # Rename 'Date' column in stock_df if needed
+    if "Date" in stock_df.columns:
+        stock_df.rename(columns={"Date": "ds"}, inplace=True)
+
+    return btc_df, stock_df
+
+# Fetch and prepare data
+btc_df, stock_df = fetch_and_prepare_data()
 
 # Ensure 'ds' is a datetime type in both DataFrames
 btc_df["ds"] = pd.to_datetime(btc_df["ds"])
@@ -382,58 +388,28 @@ if 'price_thread' not in st.session_state:
     st.session_state.price_thread = threading.Thread(target=update_price_in_background)
     st.session_state.price_thread.daemon = True
     st.session_state.price_thread.start()
-# Fetch data first if missing
-if 'btc_df' not in locals():
-    btc_df = fetch_btc_data()
 
-if 'stock_df' not in locals():
-    stock_df = fetch_stock_data()
+# Fetch and prepare data again if needed
+btc_df, stock_df = fetch_and_prepare_data()
 
 # Ensure DataFrames are properly indexed before merging
 btc_df = btc_df.reset_index()
 stock_df = stock_df.reset_index()
 
-# Rename 'Date' column in stock_df if needed
-if "Date" in stock_df.columns:
-    stock_df.rename(columns={"Date": "ds"}, inplace=True)
-
 # Merge DataFrames
 merged_df = pd.merge(btc_df, stock_df, on="ds", how="inner")
 
-btc_df = btc_df.reset_index()
-stock_df = stock_df.reset_index()
-
-# Rename Date column if needed
-if "Date" in stock_df.columns:
-    stock_df.rename(columns={"Date": "ds"}, inplace=True)
-
-# Merge DataFrames
-merged = pd.merge(btc_df, stock_df, on="ds", how="inner")
-
 # Main dashboard tab
 with tab1:
-    # Fetch data
-    btc_df = fetch_btc_data()
-    stock_df = fetch_stock_data()
+    # Fetch and prepare data
+    btc_df, stock_df = fetch_and_prepare_data()
     articles, sentiment_score = fetch_news_sentiment()
-    
-    print(btc_df.index)
-    print(stock_df.index)
-    
+
     col1, col2 = st.columns([3, 1])
 
-# Main dashboard tab
-with tab1:
-    # Fetch data
-    btc_df = fetch_btc_data()
-    stock_df = fetch_stock_data()
-    articles, sentiment_score = fetch_news_sentiment()
-    
-    col1, col2 = st.columns([3, 1])
-    
     with col2:
         st.subheader("🌍 Global Market Context")
-        
+
         # Stock market correlation
         if not stock_df.empty and not btc_df.empty:
             merged = pd.merge(btc_df, stock_df, on="ds", how="inner")
@@ -441,37 +417,37 @@ with tab1:
                 btc_returns = merged["y"].pct_change()
                 spy_returns = merged["stock_price"].pct_change()
                 correlation = btc_returns.corr(spy_returns)
-                
+
                 st.metric(
-                    "BTC-SPY Correlation", 
-                    f"{correlation:.2f}", 
+                    "BTC-SPY Correlation",
+                    f"{correlation:.2f}",
                     delta=f"{(correlation - btc_returns[-30:-1].corr(spy_returns[-30:-1])):.2f}",
                     delta_color="normal"
                 )
-                
+
                 # Simple display of SPY performance
                 spy_last = stock_df["stock_price"].iloc[-1]
                 spy_prev = stock_df["stock_price"].iloc[-2]
                 spy_change = (spy_last - spy_prev) / spy_prev * 100
-                
+
                 st.metric(
-                    "S&P 500 (SPY)", 
-                    f"${spy_last:.2f}", 
+                    "S&P 500 (SPY)",
+                    f"${spy_last:.2f}",
                     delta=f"{spy_change:.2f}%",
                     delta_color="normal"
                 )
-        
+
         # News sentiment indicator
         sentiment_label = "Bullish" if sentiment_score > 0.05 else "Bearish" if sentiment_score < -0.05 else "Neutral"
         sentiment_color = "green" if sentiment_score > 0.05 else "red" if sentiment_score < -0.05 else "gray"
-        
+
         st.metric(
-            "News Sentiment", 
-            sentiment_label, 
+            "News Sentiment",
+            sentiment_label,
             delta=f"{sentiment_score:.2f}",
             delta_color="normal"
         )
-        
+
         world_events = get_world_events()
         st.write("Recent Impactful Events:")
         for _, event in world_events.iterrows():
@@ -482,39 +458,39 @@ with tab1:
         if not btc_df.empty:
             # User input for forecast period
             days = st.slider("🔮 Select Forecast Period (Days)", min_value=7, max_value=90, value=30)
-            
+
             # Compute technical indicators
             btc_df = compute_indicators(btc_df)
-            
+
             # Run enhanced prediction
             forecast, enhanced_df = predict_btc_enhanced(btc_df, stock_df, sentiment_score, days)
-            
+
             # Get ML prediction as complementary model
             ml_predictions, ml_accuracy = train_ml_model(btc_df, days)
-            
+
             if not forecast.empty:
                 # Create merged dataframe for display
                 merged_df = pd.merge(btc_df, forecast[["ds", "yhat", "yhat_lower", "yhat_upper"]], on="ds", how="inner")
-                
+
                 # Compute model accuracy
                 mape = mean_absolute_percentage_error(merged_df["y"], merged_df["yhat"]) * 100
                 prophet_accuracy = 100 - mape
-                
+
                 # Display accuracy metrics
                 col1a, col1b = st.columns(2)
-                
+
                 with col1a:
                     st.info(f"📊 Prophet Model Accuracy: {prophet_accuracy:.2f}%")
-                
+
                 with col1b:
                     if ml_accuracy:
                         st.info(f"📊 ML Model Accuracy: {ml_accuracy:.2f}%")
-                
+
                 # Create prediction visualization
                 df_past = btc_df[btc_df["ds"] >= btc_df["ds"].max() - pd.Timedelta(days=30)]
-                
+
                 fig = go.Figure()
-                
+
                 # Add actual prices
                 fig.add_trace(go.Scatter(
                     x=df_past["ds"],
@@ -523,7 +499,7 @@ with tab1:
                     name='Actual Price',
                     line=dict(color='blue')
                 ))
-                
+
                 # Add prophet forecast
                 fig.add_trace(go.Scatter(
                     x=forecast["ds"][len(btc_df):],
@@ -532,7 +508,7 @@ with tab1:
                     name='Prophet Forecast',
                     line=dict(color='green', dash='dash')
                 ))
-                
+
                 # Add confidence interval
                 fig.add_trace(go.Scatter(
                     x=forecast["ds"][len(btc_df):],
@@ -542,7 +518,7 @@ with tab1:
                     line=dict(width=0),
                     showlegend=False
                 ))
-                
+
                 fig.add_trace(go.Scatter(
                     x=forecast["ds"][len(btc_df):],
                     y=forecast["yhat_lower"][len(btc_df):],
@@ -553,7 +529,7 @@ with tab1:
                     fillcolor='rgba(0, 176, 0, 0.2)',
                     showlegend=False
                 ))
-                
+
                 # Add ML model prediction if available
                 if ml_predictions is not None:
                     fig.add_trace(go.Scatter(
@@ -563,7 +539,7 @@ with tab1:
                         name='ML Forecast',
                         line=dict(color='purple', dash='dot')
                     ))
-                
+
                 # Update layout
                 fig.update_layout(
                     title="Bitcoin Price Forecast",
@@ -572,56 +548,56 @@ with tab1:
                     legend=dict(x=0, y=1),
                     hovermode="x"
                 )
-                
+
                 st.plotly_chart(fig, use_container_width=True)
-                
+
                 # Show forecasted prices table
                 st.subheader("📅 Forecasted Prices")
-                
+
                 # Merge Prophet and ML forecasts
                 forecast_display = forecast[["ds", "yhat", "yhat_lower", "yhat_upper"]].iloc[-days:]
                 forecast_display = forecast_display.rename(columns={
-                    "ds": "Date", 
-                    "yhat": "Prophet Forecast", 
-                    "yhat_lower": "Lower Bound", 
+                    "ds": "Date",
+                    "yhat": "Prophet Forecast",
+                    "yhat_lower": "Lower Bound",
                     "yhat_upper": "Upper Bound"
                 })
-                
+
                 if ml_predictions is not None:
                     ml_for_display = ml_predictions[["ds", "ml_prediction"]].rename(
                         columns={"ds": "Date", "ml_prediction": "ML Forecast"}
                     )
                     forecast_display = pd.merge(forecast_display, ml_for_display, on="Date", how="left")
-                
+
                 # Calculate ensemble prediction (average of Prophet and ML)
                 if ml_predictions is not None:
                     forecast_display["Ensemble Forecast"] = (
                         forecast_display["Prophet Forecast"] + forecast_display["ML Forecast"]
                     ) / 2
-                
+
                 # Format date column
                 forecast_display["Date"] = forecast_display["Date"].dt.strftime('%Y-%m-%d')
-                
+
                 st.dataframe(forecast_display)
-                
+
                 # Forecast summary
                 last_price = btc_df["y"].iloc[-1]
                 forecast_price = forecast_display["Prophet Forecast"].iloc[-1]
                 price_change = ((forecast_price / last_price) - 1) * 100
-                
+
                 st.subheader("📈 Forecast Summary")
                 summary_col1, summary_col2, summary_col3 = st.columns(3)
-                
+
                 with summary_col1:
                     st.metric("Current BTC Price", f"${last_price:,.2f}")
-                
+
                 with summary_col2:
                     st.metric(
-                        f"Forecast ({days} days)", 
-                        f"${forecast_price:,.2f}", 
+                        f"Forecast ({days} days)",
+                        f"${forecast_price:,.2f}",
                         delta=f"{price_change:.2f}%"
                     )
-                
+
                 with summary_col3:
                     projected_high = forecast_display["Upper Bound"].max()
                     projected_high_date = forecast_display.loc[forecast_display["Upper Bound"].idxmax(), "Date"]
