@@ -432,3 +432,299 @@ with tab1:
             ml_predictions, ml_accuracy = train_ml_model(btc_df, days)
             
             if not forecast.empty:
+                # Create merged dataframe for display
+                merged_df = pd.merge(btc_df, forecast[["ds", "yhat", "yhat_lower", "yhat_upper"]], on="ds", how="inner")
+                
+                # Compute model accuracy
+                mape = mean_absolute_percentage_error(merged_df["y"], merged_df["yhat"]) * 100
+                prophet_accuracy = 100 - mape
+                
+                # Display accuracy metrics
+                col1a, col1b = st.columns(2)
+                
+                with col1a:
+                    st.info(f"📊 Prophet Model Accuracy: {prophet_accuracy:.2f}%")
+                
+                with col1b:
+                    if ml_accuracy:
+                        st.info(f"📊 ML Model Accuracy: {ml_accuracy:.2f}%")
+                
+                # Create prediction visualization
+                df_past = btc_df[btc_df["ds"] >= btc_df["ds"].max() - pd.Timedelta(days=30)]
+                
+                fig = go.Figure()
+                
+                # Add actual prices
+                fig.add_trace(go.Scatter(
+                    x=df_past["ds"],
+                    y=df_past["y"],
+                    mode='lines',
+                    name='Actual Price',
+                    line=dict(color='blue')
+                ))
+                
+                # Add prophet forecast
+                fig.add_trace(go.Scatter(
+                    x=forecast["ds"][len(btc_df):],
+                    y=forecast["yhat"][len(btc_df):],
+                    mode='lines',
+                    name='Prophet Forecast',
+                    line=dict(color='green', dash='dash')
+                ))
+                
+                # Add confidence interval
+                fig.add_trace(go.Scatter(
+                    x=forecast["ds"][len(btc_df):],
+                    y=forecast["yhat_upper"][len(btc_df):],
+                    mode='lines',
+                    name='Upper Bound',
+                    line=dict(width=0),
+                    showlegend=False
+                ))
+                
+                fig.add_trace(go.Scatter(
+                    x=forecast["ds"][len(btc_df):],
+                    y=forecast["yhat_lower"][len(btc_df):],
+                    mode='lines',
+                    name='Lower Bound',
+                    line=dict(width=0),
+                    fill='tonexty',
+                    fillcolor='rgba(0, 176, 0, 0.2)',
+                    showlegend=False
+                ))
+                
+                # Add ML model prediction if available
+                if ml_predictions is not None:
+                    fig.add_trace(go.Scatter(
+                        x=ml_predictions["ds"],
+                        y=ml_predictions["ml_prediction"],
+                        mode='lines',
+                        name='ML Forecast',
+                        line=dict(color='purple', dash='dot')
+                    ))
+                
+                # Update layout
+                fig.update_layout(
+                    title="Bitcoin Price Forecast",
+                    xaxis_title="Date",
+                    yaxis_title="Price (USD)",
+                    legend=dict(x=0, y=1),
+                    hovermode="x"
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Show forecasted prices table
+                st.subheader("📅 Forecasted Prices")
+                
+                # Merge Prophet and ML forecasts
+                forecast_display = forecast[["ds", "yhat", "yhat_lower", "yhat_upper"]].iloc[-days:]
+                forecast_display = forecast_display.rename(columns={
+                    "ds": "Date", 
+                    "yhat": "Prophet Forecast", 
+                    "yhat_lower": "Lower Bound", 
+                    "yhat_upper": "Upper Bound"
+                })
+                
+                if ml_predictions is not None:
+                    ml_for_display = ml_predictions[["ds", "ml_prediction"]].rename(
+                        columns={"ds": "Date", "ml_prediction": "ML Forecast"}
+                    )
+                    forecast_display = pd.merge(forecast_display, ml_for_display, on="Date", how="left")
+                
+                # Calculate ensemble prediction (average of Prophet and ML)
+                if ml_predictions is not None:
+                    forecast_display["Ensemble Forecast"] = (
+                        forecast_display["Prophet Forecast"] + forecast_display["ML Forecast"]
+                    ) / 2
+                
+                # Format date column
+                forecast_display["Date"] = forecast_display["Date"].dt.strftime('%Y-%m-%d')
+                
+                st.dataframe(forecast_display)
+                
+                # Forecast summary
+                last_price = btc_df["y"].iloc[-1]
+                forecast_price = forecast_display["Prophet Forecast"].iloc[-1]
+                price_change = ((forecast_price / last_price) - 1) * 100
+                
+                st.subheader("📈 Forecast Summary")
+                summary_col1, summary_col2, summary_col3 = st.columns(3)
+                
+                with summary_col1:
+                    st.metric("Current BTC Price", f"${last_price:,.2f}")
+                
+                with summary_col2:
+                    st.metric(
+                        f"Forecast ({days} days)", 
+                        f"${forecast_price:,.2f}", 
+                        delta=f"{price_change:.2f}%"
+                    )
+                
+                with summary_col3:
+                    projected_high = forecast_display["Upper Bound"].max()
+                    projected_high_date = forecast_display.loc[forecast_display["Upper Bound"].idxmax(), "Date"]
+                    st.metric("Projected High", f"${projected_high:,.2f}", delta=f"on {projected_high_date}")
+            else:
+                st.error("Error generating forecast. Please check data and try again.")
+        else:
+            st.error("Failed to fetch Bitcoin data. Please check your internet connection.")
+
+# News and world events tab
+with tab2:
+    st.subheader("📰 Latest Crypto News")
+    
+    # Display sentiment analysis
+    st.write(f"Overall market sentiment based on news analysis: **{sentiment_score:.2f}**")
+    sentiment_gauge = {
+        "data": [
+            {
+                "type": "indicator",
+                "mode": "gauge+number",
+                "value": sentiment_score,
+                "domain": {"x": [0, 1], "y": [0, 1]},
+                "gauge": {
+                    "axis": {"range": [-1, 1]},
+                    "bar": {"color": "darkblue"},
+                    "steps": [
+                        {"range": [-1, -0.5], "color": "red"},
+                        {"range": [-0.5, -0.1], "color": "orange"},
+                        {"range": [-0.1, 0.1], "color": "gray"},
+                        {"range": [0.1, 0.5], "color": "lightgreen"},
+                        {"range": [0.5, 1], "color": "green"}
+                    ],
+                    "threshold": {
+                        "line": {"color": "black", "width": 4},
+                        "thickness": 0.75,
+                        "value": sentiment_score
+                    }
+                },
+                "title": {"text": "News Sentiment"}
+            }
+        ]
+    }
+    
+    st.plotly_chart(go.Figure(sentiment_gauge["data"]), use_container_width=True)
+    
+    # Display fetched news articles
+    for i, article in enumerate(articles):
+        with st.expander(f"{article['source']} - {article['title']}"):
+            st.write(article['text'])
+            
+            # Calculate article-specific sentiment
+            article_sentiment = sia.polarity_scores(article['text'])
+            
+            st.progress(
+                (article_sentiment['compound'] + 1) / 2,  # Convert -1,1 to 0,1 for progress bar
+                text=f"Sentiment: {article_sentiment['compound']:.2f}"
+            )
+    
+    # World events with impact analysis
+    st.subheader("🌍 Major World Events Affecting Crypto")
+    
+    events_df = get_world_events()
+    
+    # Create visualization for events impact
+    events_fig = go.Figure()
+    
+    events_fig.add_trace(go.Bar(
+        x=events_df["date"],
+        y=events_df["impact"],
+        marker_color=['red' if x < 0 else 'green' for x in events_df["impact"]],
+        text=events_df["event"],
+        hoverinfo="text+y"
+    ))
+    
+    events_fig.update_layout(
+        title="Impact of Recent Events on Bitcoin Price",
+        xaxis_title="Date",
+        yaxis_title="Estimated Impact (%)",
+        hovermode="closest"
+    )
+    
+    st.plotly_chart(events_fig, use_container_width=True)
+    
+    # Correlation analysis section
+    st.subheader("📊 Correlation with Traditional Markets")
+    
+    if not stock_df.empty and not btc_df.empty:
+        merged = pd.merge(btc_df, stock_df, on="ds", how="inner")
+        
+        # Calculate rolling correlation
+        window_size = 30
+        merged["correlation"] = merged["y"].pct_change().rolling(window=window_size).corr(
+            merged["stock_price"].pct_change()
+        )
+        
+        # Create correlation chart
+        corr_fig = go.Figure()
+        
+        corr_fig.add_trace(go.Scatter(
+            x=merged["ds"][-90:],
+            y=merged["correlation"][-90:],
+            mode='lines',
+            name='BTC-SPY Correlation',
+            line=dict(color='blue')
+        ))
+        
+        # Add zero line
+        corr_fig.add_shape(
+            type="line",
+            x0=merged["ds"][-90:].iloc[0],
+            y0=0,
+            x1=merged["ds"][-90:].iloc[-1],
+            y1=0,
+            line=dict(color="black", width=1, dash="dash")
+        )
+        
+        corr_fig.update_layout(
+            title=f"{window_size}-Day Rolling Correlation: Bitcoin vs S&P 500",
+            xaxis_title="Date",
+            yaxis_title="Correlation",
+            yaxis=dict(range=[-1, 1])
+        )
+        
+        st.plotly_chart(corr_fig, use_container_width=True)
+        
+        # Display scatter plot
+        scatter_fig = go.Figure()
+        
+        scatter_fig.add_trace(go.Scatter(
+            x=merged["stock_price"].pct_change()[-90:],
+            y=merged["y"].pct_change()[-90:],
+            mode='markers',
+            name='Daily Returns',
+            marker=dict(
+                size=8,
+                color='blue',
+                opacity=0.7
+            )
+        ))
+        
+        # Add trend line
+        scatter_fig.add_shape(
+            type="line",
+            x0=merged["stock_price"].pct_change()[-90:].min(),
+            y0=merged["stock_price"].pct_change()[-90:].min() * correlation,
+            x1=merged["stock_price"].pct_change()[-90:].max(),
+            y1=merged["stock_price"].pct_change()[-90:].max() * correlation,
+            line=dict(color="red", width=2)
+        )
+        
+        scatter_fig.update_layout(
+            title="Bitcoin vs S&P 500: Daily Returns (Last 90 Days)",
+            xaxis_title="S&P 500 Daily Return (%)",
+            yaxis_title="Bitcoin Daily Return (%)",
+            xaxis=dict(tickformat='.1%'),
+            yaxis=dict(tickformat='.1%')
+        )
+        
+        st.plotly_chart(scatter_fig, use_container_width=True)
+
+# Technical Analysis tab
+with tab3:
+    if not btc_df.empty:
+        st.subheader("📊 Technical Indicators")
+        
+        # Create tabs for different technical indicators
+        ta_tab1, ta_tab2, ta_tab3 = st.tabs(["Moving Averages", "Bollinger Bands", "Momentum"])
