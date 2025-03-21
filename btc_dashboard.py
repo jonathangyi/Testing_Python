@@ -354,6 +354,14 @@ def update_price_in_background():
             last_price = current_price
         
         time.sleep(1)  # Update every second
+
+# Fetch data first if missing
+if 'btc_df' not in locals():
+    btc_df = fetch_btc_data()
+
+if 'stock_df' not in locals():
+    stock_df = fetch_stock_data()
+    
 # Reset index to ensure single-level index before merging
 btc_df = btc_df.reset_index(drop=True)
 stock_df = stock_df.reset_index(drop=True)
