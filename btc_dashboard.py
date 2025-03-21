@@ -462,148 +462,83 @@ with tab1:
             # Compute technical indicators
             btc_df = compute_indicators(btc_df)
 
-            # Run enhanced prediction
-            forecast, enhanced_df = predict_btc_enhanced(btc_df, stock_df, sentiment_score, days)
+            # Run enhanced prediction for Bitcoin
+            forecast_btc, enhanced_btc_df = predict_btc_enhanced(btc_df, stock_df, sentiment_score, days)
 
-            # Get ML prediction as complementary model
-            ml_predictions, ml_accuracy = train_ml_model(btc_df, days)
+            # Get ML prediction as complementary model for Bitcoin
+            ml_predictions_btc, ml_accuracy_btc = train_ml_model(btc_df, days)
 
-            if not forecast.empty:
-                # Create merged dataframe for display
-                merged_df = pd.merge(btc_df, forecast[["ds", "yhat", "yhat_lower", "yhat_upper"]], on="ds", how="inner")
-
-                # Compute model accuracy
-                mape = mean_absolute_percentage_error(merged_df["y"], merged_df["yhat"]) * 100
-                prophet_accuracy = 100 - mape
-
-                # Display accuracy metrics
-                col1a, col1b = st.columns(2)
-
-                with col1a:
-                    st.info(f"📊 Prophet Model Accuracy: {prophet_accuracy:.2f}%")
-
-                with col1b:
-                    if ml_accuracy:
-                        st.info(f"📊 ML Model Accuracy: {ml_accuracy:.2f}%")
-
-                # Create prediction visualization
-                df_past = btc_df[btc_df["ds"] >= btc_df["ds"].max() - pd.Timedelta(days=30)]
-
-                fig = go.Figure()
-
-                # Add actual prices
-                fig.add_trace(go.Scatter(
-                    x=df_past["ds"],
-                    y=df_past["y"],
-                    mode='lines',
-                    name='Actual Price',
-                    line=dict(color='blue')
-                ))
-
-                # Add prophet forecast
-                fig.add_trace(go.Scatter(
-                    x=forecast["ds"][len(btc_df):],
-                    y=forecast["yhat"][len(btc_df):],
-                    mode='lines',
-                    name='Prophet Forecast',
-                    line=dict(color='green', dash='dash')
-                ))
-
-                # Add confidence interval
-                fig.add_trace(go.Scatter(
-                    x=forecast["ds"][len(btc_df):],
-                    y=forecast["yhat_upper"][len(btc_df):],
-                    mode='lines',
-                    name='Upper Bound',
-                    line=dict(width=0),
-                    showlegend=False
-                ))
-
-                fig.add_trace(go.Scatter(
-                    x=forecast["ds"][len(btc_df):],
-                    y=forecast["yhat_lower"][len(btc_df):],
-                    mode='lines',
-                    name='Lower Bound',
-                    line=dict(width=0),
-                    fill='tonexty',
-                    fillcolor='rgba(0, 176, 0, 0.2)',
-                    showlegend=False
-                ))
-
-                # Add ML model prediction if available
-                if ml_predictions is not None:
-                    fig.add_trace(go.Scatter(
-                        x=ml_predictions["ds"],
-                        y=ml_predictions["ml_prediction"],
-                        mode='lines',
-                        name='ML Forecast',
-                        line=dict(color='purple', dash='dot')
-                    ))
-
-                # Update layout
-                fig.update_layout(
-                    title="Bitcoin Price Forecast",
-                    xaxis_title="Date",
-                    yaxis_title="Price (USD)",
-                    legend=dict(x=0, y=1),
-                    hovermode="x"
-                )
-
-                st.plotly_chart(fig, use_container_width=True)
-
-                # Show forecasted prices table
-                st.subheader("📅 Forecasted Prices")
-
-                # Merge Prophet and ML forecasts
-                forecast_display = forecast[["ds", "yhat", "yhat_lower", "yhat_upper"]].iloc[-days:]
-                forecast_display = forecast_display.rename(columns={
+            # Display Bitcoin forecast
+            if not forecast_btc.empty:
+                # Create dataframe for display
+                forecast_display_btc = forecast_btc[["ds", "yhat", "yhat_lower", "yhat_upper"]].iloc[-days:]
+                forecast_display_btc = forecast_display_btc.rename(columns={
                     "ds": "Date",
                     "yhat": "Prophet Forecast",
                     "yhat_lower": "Lower Bound",
                     "yhat_upper": "Upper Bound"
                 })
 
-                if ml_predictions is not None:
-                    ml_for_display = ml_predictions[["ds", "ml_prediction"]].rename(
+                if ml_predictions_btc is not None:
+                    ml_for_display_btc = ml_predictions_btc[["ds", "ml_prediction"]].rename(
                         columns={"ds": "Date", "ml_prediction": "ML Forecast"}
                     )
-                    forecast_display = pd.merge(forecast_display, ml_for_display, on="Date", how="left")
+                    forecast_display_btc = pd.merge(forecast_display_btc, ml_for_display_btc, on="Date", how="left")
 
                 # Calculate ensemble prediction (average of Prophet and ML)
-                if ml_predictions is not None:
-                    forecast_display["Ensemble Forecast"] = (
-                        forecast_display["Prophet Forecast"] + forecast_display["ML Forecast"]
+                if ml_predictions_btc is not None:
+                    forecast_display_btc["Ensemble Forecast"] = (
+                        forecast_display_btc["Prophet Forecast"] + forecast_display_btc["ML Forecast"]
                     ) / 2
 
                 # Format date column
-                forecast_display["Date"] = forecast_display["Date"].dt.strftime('%Y-%m-%d')
+                forecast_display_btc["Date"] = forecast_display_btc["Date"].dt.strftime('%Y-%m-%d')
 
-                st.dataframe(forecast_display)
+                st.subheader("📅 Bitcoin Forecasted Prices")
+                st.dataframe(forecast_display_btc)
 
-                # Forecast summary
-                last_price = btc_df["y"].iloc[-1]
-                forecast_price = forecast_display["Prophet Forecast"].iloc[-1]
-                price_change = ((forecast_price / last_price) - 1) * 100
+                # Forecast summary for Bitcoin
+                last_price_btc = btc_df["y"].iloc[-1]
+                forecast_price_btc = forecast_display_btc["Prophet Forecast"].iloc[-1]
+                price_change_btc = ((forecast_price_btc / last_price_btc) - 1) * 100
 
-                st.subheader("📈 Forecast Summary")
+                st.subheader("📈 Bitcoin Forecast Summary")
                 summary_col1, summary_col2, summary_col3 = st.columns(3)
 
                 with summary_col1:
-                    st.metric("Current BTC Price", f"${last_price:,.2f}")
+                    st.metric("Current BTC Price", f"${last_price_btc:,.2f}")
 
                 with summary_col2:
                     st.metric(
                         f"Forecast ({days} days)",
-                        f"${forecast_price:,.2f}",
-                        delta=f"{price_change:.2f}%"
+                        f"${forecast_price_btc:,.2f}",
+                        delta=f"{price_change_btc:.2f}%"
                     )
 
                 with summary_col3:
-                    projected_high = forecast_display["Upper Bound"].max()
-                    projected_high_date = forecast_display.loc[forecast_display["Upper Bound"].idxmax(), "Date"]
-                    st.metric("Projected High", f"${projected_high:,.2f}", delta=f"on {projected_high_date}")
+                    projected_high_btc = forecast_display_btc["Upper Bound"].max()
+                    projected_high_date_btc = forecast_display_btc.loc[forecast_display_btc["Upper Bound"].idxmax(), "Date"]
+                    st.metric("Projected High", f"${projected_high_btc:,.2f}", delta=f"on {projected_high_date_btc}")
+
             else:
-                st.error("Error generating forecast. Please check data and try again.")
+                st.error("Error generating Bitcoin forecast. Please check data and try again.")
+
+            # Display stock market data
+            if not stock_df.empty:
+                st.subheader("📊 Stock Market Data (S&P 500)")
+
+                # Display stock market data
+                st.dataframe(stock_df)
+
+                # Compute stock market indicators
+                stock_df = compute_indicators(stock_df)
+
+                # Display stock market indicators
+                st.subheader("📊 Stock Market Technical Indicators")
+                st.dataframe(stock_df)
+
+            else:
+                st.error("Failed to fetch stock market data. Please check your internet connection.")
         else:
             st.error("Failed to fetch Bitcoin data. Please check your internet connection.")
 
@@ -743,8 +678,8 @@ with tab2:
             type="line",
             x0=merged["stock_price"].pct_change()[-90:].min(),
             y0=merged["stock_price"].pct_change()[-90:].min() * correlation,
-            x1=merged["stock_price"].pct_change()[-90:].max(),
-            y1=merged["stock_price"].pct_change()[-90:].max() * correlation,
+            x1=merged["stock_price"].pct.change()[-90:].max(),
+            y1=merged["stock_price"].pct.change()[-90:].max() * correlation,
             line=dict(color="red", width=2)
         )
         
