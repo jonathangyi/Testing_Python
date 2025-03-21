@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import requests
 import matplotlib.pyplot as plt
+plt.rcParams['font.family'] = 'Arial'  # Change to a font that supports emojis
+
 import matplotlib.dates as mdates
 import ta
 from prophet import Prophet
@@ -36,7 +38,8 @@ def predict_btc(df, days):
 
 # Function to compute technical indicators
 def compute_indicators(df):
-    df["SMA_10"] = ta.trend.sma_indicator(df["y"], window=10).fillna(method='bfill')
+    df["SMA_10"] = ta.trend.sma_indicator(df["y"], window=10).bfill()
+
     df["SMA_50"] = ta.trend.sma_indicator(df["y"], window=50).fillna(method='bfill')
     df["RSI"] = ta.momentum.rsi(df["y"], window=14).fillna(method='bfill')
     return df
