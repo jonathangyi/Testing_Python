@@ -39,9 +39,8 @@ def predict_btc(df, days):
 # Function to compute technical indicators
 def compute_indicators(df):
     df["SMA_10"] = ta.trend.sma_indicator(df["y"], window=10).bfill()
-
-    df["SMA_50"] = ta.trend.sma_indicator(df["y"], window=50).fillna(method='bfill')
-    df["RSI"] = ta.momentum.rsi(df["y"], window=14).fillna(method='bfill')
+    df["SMA_50"] = ta.trend.sma_indicator(df["y"], window=50).bfill()  # Updated
+    df["RSI"] = ta.momentum.rsi(df["y"], window=14).bfill()  # Updated
     return df
 
 # Streamlit App UI
