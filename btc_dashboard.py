@@ -727,4 +727,53 @@ with tab3:
         st.subheader("📊 Technical Indicators")
         
         # Create tabs for different technical indicators
-        ta_tab1, ta_tab2, ta_tab3 = st.tabs(["Moving Averages", "Bollinger Bands", "Momentum"])
+        ta_tab1, ta_tab2, ta_tab3 = st.tabs(["Moving Averages", "Momentum Indicators", "Volume & Volatility"])
+        
+        # Moving Averages
+        with ta_tab1:
+            st.write("### Simple Moving Averages (SMA)")
+            fig_sma = go.Figure()
+            
+            fig_sma.add_trace(go.Scatter(x=btc_df["ds"], y=btc_df["y"], mode='lines', name='BTC Price', line=dict(color='blue')))
+            fig_sma.add_trace(go.Scatter(x=btc_df["ds"], y=btc_df["SMA_10"], mode='lines', name='SMA 10', line=dict(color='orange', dash='dash')))
+            fig_sma.add_trace(go.Scatter(x=btc_df["ds"], y=btc_df["SMA_50"], mode='lines', name='SMA 50', line=dict(color='red', dash='dash')))
+            
+            fig_sma.update_layout(title="BTC Price with Simple Moving Averages", xaxis_title="Date", yaxis_title="Price (USD)")
+            st.plotly_chart(fig_sma, use_container_width=True)
+        
+        # Momentum Indicators
+        with ta_tab2:
+            st.write("### Relative Strength Index (RSI)")
+            fig_rsi = go.Figure()
+            
+            fig_rsi.add_trace(go.Scatter(x=btc_df["ds"], y=btc_df["RSI"], mode='lines', name='RSI', line=dict(color='purple')))
+            
+            # Overbought and oversold lines
+            fig_rsi.add_shape(type='line', x0=btc_df["ds"].iloc[0], y0=70, x1=btc_df["ds"].iloc[-1], y1=70, line=dict(color='red', dash='dash'))
+            fig_rsi.add_shape(type='line', x0=btc_df["ds"].iloc[0], y0=30, x1=btc_df["ds"].iloc[-1], y1=30, line=dict(color='green', dash='dash'))
+            
+            fig_rsi.update_layout(title="Relative Strength Index (RSI)", xaxis_title="Date", yaxis_title="RSI Value", yaxis=dict(range=[0, 100]))
+            st.plotly_chart(fig_rsi, use_container_width=True)
+        
+        # Volume & Volatility Indicators
+        with ta_tab3:
+            st.write("### Bollinger Bands & MACD")
+            fig_bb = go.Figure()
+            
+            fig_bb.add_trace(go.Scatter(x=btc_df["ds"], y=btc_df["y"], mode='lines', name='BTC Price', line=dict(color='blue')))
+            fig_bb.add_trace(go.Scatter(x=btc_df["ds"], y=btc_df["bb_upper"], mode='lines', name='Bollinger Upper', line=dict(color='green', dash='dash')))
+            fig_bb.add_trace(go.Scatter(x=btc_df["ds"], y=btc_df["bb_lower"], mode='lines', name='Bollinger Lower', line=dict(color='red', dash='dash')))
+            
+            fig_bb.update_layout(title="Bollinger Bands", xaxis_title="Date", yaxis_title="Price (USD)")
+            st.plotly_chart(fig_bb, use_container_width=True)
+            
+            # MACD Chart
+            fig_macd = go.Figure()
+            
+            fig_macd.add_trace(go.Scatter(x=btc_df["ds"], y=btc_df["macd"], mode='lines', name='MACD', line=dict(color='blue')))
+            fig_macd.add_trace(go.Scatter(x=btc_df["ds"], y=btc_df["macd_signal"], mode='lines', name='MACD Signal', line=dict(color='red', dash='dash')))
+            
+            fig_macd.update_layout(title="MACD Indicator", xaxis_title="Date", yaxis_title="MACD Value")
+            st.plotly_chart(fig_macd, use_container_width=True)
+    else:
+        st.error("No data available for technical analysis. Please check your data sources.")
