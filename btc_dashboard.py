@@ -71,7 +71,7 @@ def fetch_news_sentiment():
         # List of crypto news sources
         news_sources = [
             "https://www.coindesk.com/",
-            "https://cointelegraph.com/",
+            #"https://cointelegraph.com/",
             "https://decrypt.co/",
             "https://www.theblockcrypto.com/"
         ]
@@ -360,6 +360,18 @@ if 'price_thread' not in st.session_state:
     st.session_state.price_thread = threading.Thread(target=update_price_in_background)
     st.session_state.price_thread.daemon = True
     st.session_state.price_thread.start()
+
+# Main dashboard tab
+with tab1:
+    # Fetch data
+    btc_df = fetch_btc_data()
+    stock_df = fetch_stock_data()
+    articles, sentiment_score = fetch_news_sentiment()
+    
+    print(btc_df.index)
+    print(stock_df.index)
+    
+    col1, col2 = st.columns([3, 1])
 
 # Main dashboard tab
 with tab1:
