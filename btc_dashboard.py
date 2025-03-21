@@ -361,6 +361,16 @@ if 'price_thread' not in st.session_state:
     st.session_state.price_thread.daemon = True
     st.session_state.price_thread.start()
 
+btc_df = btc_df.reset_index()
+stock_df = stock_df.reset_index()
+
+# Rename Date column if needed
+if "Date" in stock_df.columns:
+    stock_df.rename(columns={"Date": "ds"}, inplace=True)
+
+# Merge DataFrames
+merged = pd.merge(btc_df, stock_df, on="ds", how="inner")
+
 # Main dashboard tab
 with tab1:
     # Fetch data
