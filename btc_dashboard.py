@@ -393,8 +393,8 @@ if 'price_thread' not in st.session_state:
 btc_df, stock_df = fetch_and_prepare_data()
 
 # Ensure DataFrames are properly indexed before merging
-btc_df = btc_df.reset_index()
-stock_df = stock_df.reset_index()
+btc_df = btc_df.reset_index(drop=True)
+stock_df = stock_df.reset_index(drop=True)
 
 # Merge DataFrames
 merged_df = pd.merge(btc_df, stock_df, on="ds", how="inner")
