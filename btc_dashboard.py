@@ -13,10 +13,19 @@ from prophet import Prophet
 from sklearn.metrics import mean_absolute_percentage_error
 
 # Function to fetch real-time BTC price
+# def get_live_btc_price():
+#     url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
+#     response = requests.get(url).json()
+#     return float(response["price"])
 def get_live_btc_price():
-    url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
-    response = requests.get(url).json()
-    return float(response["price"])
+    try:
+        url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()  # Raise exception for 4XX/5XX responses
+        return float(response.json()["price"])
+    except (requests.RequestException, KeyError, ValueError) as e:
+        st.error(f"Error fetching BTC price: {e}")
+        return None
 
 # Function to fetch historical BTC data
 def fetch_btc_data():
