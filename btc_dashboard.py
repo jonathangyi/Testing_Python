@@ -354,12 +354,43 @@ def update_price_in_background():
             last_price = current_price
         
         time.sleep(1)  # Update every second
+# Reset index to ensure single-level index before merging
+btc_df = btc_df.reset_index(drop=True)
+stock_df = stock_df.reset_index(drop=True)
+
+# Rename 'Date' column in stock_df if needed
+if "Date" in stock_df.columns:
+    stock_df.rename(columns={"Date": "ds"}, inplace=True)
+
+# Ensure 'ds' is a datetime type in both DataFrames
+btc_df["ds"] = pd.to_datetime(btc_df["ds"])
+stock_df["ds"] = pd.to_datetime(stock_df["ds"])
+
+# Merge DataFrames safely
+merged_df = pd.merge(btc_df, stock_df, on="ds", how="inner")
 
 # Initialize the price update thread
 if 'price_thread' not in st.session_state:
     st.session_state.price_thread = threading.Thread(target=update_price_in_background)
     st.session_state.price_thread.daemon = True
     st.session_state.price_thread.start()
+# Fetch data first if missing
+if 'btc_df' not in locals():
+    btc_df = fetch_btc_data()
+
+if 'stock_df' not in locals():
+    stock_df = fetch_stock_data()
+
+# Ensure DataFrames are properly indexed before merging
+btc_df = btc_df.reset_index()
+stock_df = stock_df.reset_index()
+
+# Rename 'Date' column in stock_df if needed
+if "Date" in stock_df.columns:
+    stock_df.rename(columns={"Date": "ds"}, inplace=True)
+
+# Merge DataFrames
+merged_df = pd.merge(btc_df, stock_df, on="ds", how="inner")
 
 btc_df = btc_df.reset_index()
 stock_df = stock_df.reset_index()
