@@ -2,7 +2,11 @@ import streamlit as st
 import pandas as pd
 import requests
 import matplotlib.pyplot as plt
-plt.rcParams['font.family'] = 'Arial'  # Change to a font that supports emojis
+import matplotlib.font_manager as fm
+
+# Use a font that supports emojis, such as DejaVu Sans
+plt.rcParams["font.family"] = "DejaVu Sans"
+
 
 import matplotlib.dates as mdates
 import ta
