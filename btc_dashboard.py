@@ -181,6 +181,29 @@ def predict_btc_enhanced(btc_df, stock_df, sentiment_score, days):
         st.error(f"Error in enhanced prediction: {e}")
         return pd.DataFrame(), pd.DataFrame()
 
+# New function to fetch SPY stock data
+def fetch_spy_data():
+    spy = yf.download('SPY', period='1y')
+    spy_df = spy.reset_index()
+    spy_df['ds'] = pd.to_datetime(spy_df['Date'])
+    spy_df['stock_price'] = spy_df['Close']
+    return spy_df[['ds', 'stock_price']]
+
+# New function to calculate correlation between BTC and SPY
+def calculate_btc_spy_correlation(btc_df, spy_df):
+    # Merge dataframes on date
+    merged_df = pd.merge(btc_df, spy_df, on='ds', how='inner')
+    
+    # Calculate returns
+    btc_returns = merged_df['y'].pct_change().dropna()
+    spy_returns = merged_df['stock_price'].pct_change().dropna()
+    
+    # Ensure equal length for correlation
+    min_length = min(len(btc_returns), len(spy_returns))
+    correlation = btc_returns[:min_length].corr(spy_returns[:min_length])
+    
+    return correlation, merged_df
+
 # Function to compute technical indicators
 def compute_indicators(df):
     if df.empty:
@@ -295,10 +318,10 @@ def train_ml_model(df, forecast_days):
         st.error(f"Error in ML model: {e}")
         return None, None
 
-# Streamlit App UI
-st.set_page_config(page_title="Advanced Bitcoin Prediction", layout="wide")
+# Modify Streamlit App
+st.set_page_config(page_title="Bitcoin Price Prediction", layout="wide")
 
-st.title("📈 Advanced Bitcoin Prediction Dashboard with World Events & Stock Market Integration")
+st.title("📈 Real-Time Bitcoin Prediction Dashboard")
 
 # Create tabs for organization
 tab1, tab2, tab3 = st.tabs(["Main Dashboard", "News & World Events", "Technical Analysis"])
@@ -372,6 +395,7 @@ def fetch_and_prepare_data():
         stock_df.rename(columns={"Date": "ds"}, inplace=True)
 
     return btc_df, stock_df
+
 
 # Fetch and prepare data
 btc_df, stock_df = fetch_and_prepare_data()
@@ -735,3 +759,39 @@ with tab3:
             st.plotly_chart(fig_macd, use_container_width=True)
     else:
         st.error("No data available for technical analysis. Please check your data sources.")
+
+        # New section for Stock Correlation Analysis
+st.sidebar.header("🔗 Market Correlation")
+
+# Fetch BTC and SPY data
+btc_df = fetch_btc_data()
+spy_df = fetch_spy_data()
+
+# Calculate correlation
+correlation, merged_df = calculate_btc_spy_correlation(btc_df, spy_df)
+
+# Display correlation in sidebar
+st.sidebar.metric("🤝 BTC-SPY Correlation", f"{correlation:.4f}")
+
+# Correlation Interpretation
+if correlation > 0.7:
+    st.sidebar.warning("Strong Positive Correlation 📈")
+elif correlation > 0.3:
+    st.sidebar.info("Moderate Positive Correlation 🔶")
+elif correlation > -0.3:
+    st.sidebar.success("Low or No Correlation 🟢")
+elif correlation > -0.7:
+    st.sidebar.warning("Moderate Negative Correlation 🔷")
+else:
+    st.sidebar.error("Strong Negative Correlation 📉")
+
+# Correlation Visualization
+st.sidebar.subheader("📊 Returns Comparison")
+fig, ax = plt.subplots(figsize=(10, 4))
+ax.plot(merged_df['ds'], merged_df['y'] / merged_df['y'].iloc[0] * 100, label='BTC Returns', color='orange')
+ax.plot(merged_df['ds'], merged_df['stock_price'] / merged_df['stock_price'].iloc[0] * 100, label='SPY Returns', color='blue')
+ax.set_title('Normalized Returns Comparison')
+ax.set_xlabel('Date')
+ax.set_ylabel('Normalized Returns (%)')
+ax.legend()
+st.sidebar.pyplot(fig)
